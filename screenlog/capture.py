@@ -14,9 +14,13 @@ def get_tmp_dir() -> Path:
     return tmp_dir
 
 
-def take_screenshot() -> str | None:
+def take_screenshot(window_id: int | None = None) -> str | None:
     """
     スクリーンショットを撮影し、一時ファイルのパスを返す
+
+    Args:
+        window_id: ウィンドウID。指定された場合はそのウィンドウのみをキャプチャ。
+                   Noneの場合は画面全体をキャプチャ。
 
     Returns:
         str | None: 一時ファイルのパス。失敗した場合はNone
@@ -29,8 +33,16 @@ def take_screenshot() -> str | None:
         # macOS標準のscreencaptureコマンドを使用
         # -x: 音を鳴らさない
         # -C: カーソルを含めない
+        # -l <window-id>: 指定されたウィンドウのみをキャプチャ
+        cmd = ["screencapture", "-x", "-C"]
+
+        if window_id is not None:
+            cmd.extend(["-l", str(window_id)])
+
+        cmd.append(str(filepath))
+
         result = subprocess.run(
-            ["screencapture", "-x", "-C", str(filepath)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=10
