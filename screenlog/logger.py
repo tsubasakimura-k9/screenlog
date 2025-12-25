@@ -7,12 +7,15 @@ from typing import TypedDict
 
 
 class LogEntry(TypedDict):
-    """ログエントリの型定義"""
-    timestamp: str
+    """圧縮されたログエントリの型定義"""
+    start_time: str
+    end_time: str
+    duration_minutes: int
+    snapshot_count: int
     active_app: str
     window_title: str
     ocr_text: str
-    ocr_confidence: float | None
+    avg_ocr_confidence: float | None
 
 
 def get_log_dir() -> Path:
@@ -47,7 +50,7 @@ def create_log_entry(
     timestamp: datetime | None = None
 ) -> LogEntry:
     """
-    ログエントリを作成
+    ログエントリを作成（初回作成時）
 
     Args:
         active_app: アクティブなアプリケーション名
@@ -62,15 +65,75 @@ def create_log_entry(
     if timestamp is None:
         timestamp = datetime.now()
 
+    timestamp_str = timestamp.astimezone().isoformat()
+
     entry: LogEntry = {
-        "timestamp": timestamp.astimezone().isoformat(),
+        "start_time": timestamp_str,
+        "end_time": timestamp_str,
+        "duration_minutes": 1,
+        "snapshot_count": 1,
         "active_app": active_app,
         "window_title": window_title,
         "ocr_text": ocr_text,
-        "ocr_confidence": ocr_confidence
+        "avg_ocr_confidence": ocr_confidence
     }
 
     return entry
+
+
+def update_log_entry(
+    entry: LogEntry,
+    new_timestamp: datetime,
+    new_confidence: float | None = None
+) -> LogEntry:
+    """
+    既存のログエントリを更新（OCRテキストが同じ場合）
+
+    Args:
+        entry: 既存のログエントリ
+        new_timestamp: 新しいタイムスタンプ
+        new_confidence: 新しいOCR信頼度
+
+    Returns:
+        LogEntry: 更新されたログエントリ
+    """
+    from datetime import datetime as dt
+
+    # start_timeからdatetimeオブジェクトを作成
+    start_dt = dt.fromisoformat(entry["start_time"])
+
+    # new_timestampがnaiveな場合はタイムゾーンを付与
+    if new_timestamp.tzinfo is None:
+        new_timestamp = new_timestamp.astimezone()
+
+    # 経過時間を計算（分単位）
+    duration = int((new_timestamp - start_dt).total_seconds() / 60) + 1
+
+    # snapshot_countを増やす
+    new_count = entry["snapshot_count"] + 1
+
+    # 平均信頼度を再計算
+    if new_confidence is not None and entry["avg_ocr_confidence"] is not None:
+        old_total = entry["avg_ocr_confidence"] * entry["snapshot_count"]
+        new_avg = (old_total + new_confidence) / new_count
+    elif new_confidence is not None:
+        new_avg = new_confidence
+    else:
+        new_avg = entry["avg_ocr_confidence"]
+
+    # エントリを更新
+    updated_entry: LogEntry = {
+        "start_time": entry["start_time"],
+        "end_time": new_timestamp.astimezone().isoformat(),
+        "duration_minutes": duration,
+        "snapshot_count": new_count,
+        "active_app": entry["active_app"],
+        "window_title": entry["window_title"],
+        "ocr_text": entry["ocr_text"],
+        "avg_ocr_confidence": new_avg
+    }
+
+    return updated_entry
 
 
 def write_log_entry(entry: LogEntry) -> bool:

@@ -15,7 +15,13 @@ sys.stderr.reconfigure(line_buffering=True)
 from .capture import take_screenshot, delete_screenshot
 from .window import get_active_window_info
 from .ocr import extract_text
-from .logger import create_log_entry, write_log_entry, cleanup_old_logs
+from .logger import (
+    create_log_entry,
+    update_log_entry,
+    write_log_entry,
+    cleanup_old_logs,
+    LogEntry
+)
 
 
 # グローバルな停止フラグ
@@ -29,12 +35,19 @@ def signal_handler(signum, frame):
     running = False
 
 
-def process_single_capture() -> bool:
+def process_single_capture(
+    previous_entry: LogEntry | None = None
+) -> tuple[LogEntry | None, LogEntry | None]:
     """
     1回のキャプチャ処理を実行
 
+    Args:
+        previous_entry: 前回のログエントリ（まだファイルに書き込んでいないもの）
+
     Returns:
-        bool: 処理成功した場合True
+        tuple[LogEntry | None, LogEntry | None]: (書き込むべきエントリ, 現在のエントリ)
+            - 書き込むべきエントリ: OCRテキストが変わった場合は前回のエントリ、変わってない場合はNone
+            - 現在のエントリ: 今回のキャプチャで作成または更新されたエントリ
     """
     timestamp = datetime.now()
 
@@ -42,7 +55,7 @@ def process_single_capture() -> bool:
     screenshot_path = take_screenshot()
     if screenshot_path is None:
         print(f"[{timestamp.isoformat()}] Screenshot capture failed, skipping...")
-        return False
+        return (None, previous_entry)
 
     try:
         # 2. アクティブウィンドウ情報を取得
@@ -51,28 +64,38 @@ def process_single_capture() -> bool:
         # 3. OCR処理
         ocr_result = extract_text(screenshot_path)
 
-        # 4. ログエントリを作成
-        entry = create_log_entry(
-            active_app=active_app,
-            window_title=window_title,
-            ocr_text=ocr_result.text,
-            ocr_confidence=ocr_result.confidence,
-            timestamp=timestamp
-        )
-
-        # 5. ログを保存
-        success = write_log_entry(entry)
-
-        if success:
+        # 4. 前回のエントリと比較
+        if previous_entry is not None and previous_entry["ocr_text"] == ocr_result.text:
+            # OCRテキストが同じ場合は既存エントリを更新
+            current_entry = update_log_entry(
+                entry=previous_entry,
+                new_timestamp=timestamp,
+                new_confidence=ocr_result.confidence
+            )
+            to_write = None  # ファイルには書き込まない
             text_preview = ocr_result.text[:50].replace('\n', ' ') if ocr_result.text else "(empty)"
-            print(f"[{timestamp.strftime('%H:%M:%S')}] {active_app} - {window_title[:30]}... | OCR: {text_preview}...")
+            print(f"[{timestamp.strftime('%H:%M:%S')}] (continuing) {active_app} | Snapshots: {current_entry['snapshot_count']}")
         else:
-            print(f"[{timestamp.isoformat()}] Failed to write log entry")
+            # OCRテキストが変わった場合は新しいエントリを作成
+            current_entry = create_log_entry(
+                active_app=active_app,
+                window_title=window_title,
+                ocr_text=ocr_result.text,
+                ocr_confidence=ocr_result.confidence,
+                timestamp=timestamp
+            )
+            to_write = previous_entry  # 前回のエントリをファイルに書き込む
+            text_preview = ocr_result.text[:50].replace('\n', ' ') if ocr_result.text else "(empty)"
+            print(f"[{timestamp.strftime('%H:%M:%S')}] (new) {active_app} - {window_title[:30]}... | OCR: {text_preview}...")
 
-        return success
+        return (to_write, current_entry)
+
+    except Exception as e:
+        print(f"Error in process_single_capture: {e}")
+        return (None, previous_entry)
 
     finally:
-        # 6. 一時ファイルを削除
+        # 5. 一時ファイルを削除
         delete_screenshot(screenshot_path)
 
 
@@ -96,9 +119,33 @@ def run_loop(interval: int = 60, retention_days: int = 30):
     if deleted > 0:
         print(f"Cleaned up {deleted} old log file(s)")
 
+    # 前回のログエントリを保持（まだファイルに書き込んでいないもの）
+    current_entry: LogEntry | None = None
+    current_date = datetime.now().date()
+
     while running:
         try:
-            process_single_capture()
+            # 日付が変わったかチェック
+            now = datetime.now()
+            if now.date() != current_date:
+                # 日付が変わった場合は前回のエントリを書き込む
+                if current_entry is not None:
+                    write_log_entry(current_entry)
+                    print(f"[{now.strftime('%H:%M:%S')}] Date changed - wrote final entry to previous day's log")
+                current_entry = None
+                current_date = now.date()
+
+            # キャプチャ処理
+            to_write, new_entry = process_single_capture(current_entry)
+
+            # OCRテキストが変わった場合は前回のエントリを書き込む
+            if to_write is not None:
+                success = write_log_entry(to_write)
+                if not success:
+                    print(f"[{now.strftime('%H:%M:%S')}] Failed to write log entry")
+
+            # 現在のエントリを更新
+            current_entry = new_entry
 
             # 次のキャプチャまで待機（1秒ずつ確認して停止フラグをチェック）
             for _ in range(interval):
@@ -110,6 +157,11 @@ def run_loop(interval: int = 60, retention_days: int = 30):
             print(f"Error in main loop: {e}")
             # エラーが発生しても継続
             time.sleep(interval)
+
+    # 停止時に最後のエントリを書き込む
+    if current_entry is not None:
+        write_log_entry(current_entry)
+        print("Wrote final log entry before stopping.")
 
     print("ScreenLog stopped.")
 
@@ -145,8 +197,13 @@ def main():
 
     if args.once:
         # 1回だけ実行
-        success = process_single_capture()
-        sys.exit(0 if success else 1)
+        to_write, current_entry = process_single_capture()
+        # 即座にエントリを書き込む
+        if current_entry is not None:
+            success = write_log_entry(current_entry)
+            sys.exit(0 if success else 1)
+        else:
+            sys.exit(1)
     else:
         # ループ実行
         run_loop(interval=args.interval, retention_days=args.retention)
