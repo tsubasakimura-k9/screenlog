@@ -13,7 +13,7 @@ sys.stdout.reconfigure(line_buffering=True)
 sys.stderr.reconfigure(line_buffering=True)
 
 from .capture import take_screenshot, delete_screenshot
-from .window import get_active_window_info
+from .window import get_active_window_info, get_active_window_id
 from .ocr import extract_text
 from .logger import (
     create_log_entry,
@@ -51,20 +51,23 @@ def process_single_capture(
     """
     timestamp = datetime.now()
 
-    # 1. スクリーンショットを撮影
-    screenshot_path = take_screenshot()
+    # 1. アクティブウィンドウのIDを取得
+    window_id = get_active_window_id()
+
+    # 2. スクリーンショットを撮影（アクティブウィンドウのみ）
+    screenshot_path = take_screenshot(window_id=window_id)
     if screenshot_path is None:
         print(f"[{timestamp.isoformat()}] Screenshot capture failed, skipping...")
         return (None, previous_entry)
 
     try:
-        # 2. アクティブウィンドウ情報を取得
+        # 3. アクティブウィンドウ情報を取得
         active_app, window_title = get_active_window_info()
 
-        # 3. OCR処理
+        # 4. OCR処理
         ocr_result = extract_text(screenshot_path)
 
-        # 4. 前回のエントリと比較
+        # 5. 前回のエントリと比較
         if previous_entry is not None and previous_entry["ocr_text"] == ocr_result.text:
             # OCRテキストが同じ場合は既存エントリを更新
             current_entry = update_log_entry(
@@ -95,7 +98,7 @@ def process_single_capture(
         return (None, previous_entry)
 
     finally:
-        # 5. 一時ファイルを削除
+        # 6. 一時ファイルを削除
         delete_screenshot(screenshot_path)
 
 

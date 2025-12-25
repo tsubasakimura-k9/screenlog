@@ -47,6 +47,15 @@ def extract_text(image_path: str) -> OCRResult:
         # 認識精度を高精度に設定
         request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
 
+        # 小さなテキストも認識するために最小テキスト高を0.0に設定
+        request.setMinimumTextHeight_(0.0)
+
+        # 言語補正を有効化（文脈に基づいてテキストを補正）
+        request.setUsesLanguageCorrection_(True)
+
+        # 自動的に言語を検出
+        request.setAutomaticallyDetectsLanguage_(True)
+
         # リクエストハンドラを作成して実行
         handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(
             cg_image, None
@@ -68,18 +77,36 @@ def extract_text(image_path: str) -> OCRResult:
         texts = []
         total_confidence = 0.0
         count = 0
+        total_chars = 0
+        MAX_CHARS = 20000  # 最大20,000文字
 
         for observation in results:
             if hasattr(observation, 'topCandidates_'):
                 candidates = observation.topCandidates_(1)
                 if candidates:
                     candidate = candidates[0]
-                    texts.append(candidate.string())
+                    text = candidate.string()
+
+                    # 20,000文字を超えないようにチェック
+                    if total_chars + len(text) > MAX_CHARS:
+                        # 残りの文字数だけ追加
+                        remaining = MAX_CHARS - total_chars
+                        if remaining > 0:
+                            texts.append(text[:remaining])
+                            total_chars += remaining
+                        break
+
+                    texts.append(text)
+                    total_chars += len(text)
                     total_confidence += candidate.confidence()
                     count += 1
 
         combined_text = "\n".join(texts)
         avg_confidence = total_confidence / count if count > 0 else None
+
+        # デバッグ情報: 取得したテキスト数と文字数
+        if total_chars > 1000:  # 1000文字以上の場合のみログ出力
+            print(f"OCR: {count} blocks, {total_chars} chars")
 
         return OCRResult(text=combined_text, confidence=avg_confidence)
 
