@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Logs (ログは各ユーザーのローカルに保存)
+*.log
+
+# Temporary files
+tmp/
+*.tmp
+
+# Deprecated files (launchd approach didn't work due to permission issues)
+com.screenlog.agent.plist
+scripts/install.sh
+scripts/start.sh
