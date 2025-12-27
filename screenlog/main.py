@@ -177,8 +177,8 @@ def main():
     parser.add_argument(
         "-i", "--interval",
         type=int,
-        default=60,
-        help="キャプチャ間隔（秒）。デフォルト: 60"
+        default=300,
+        help="キャプチャ間隔（秒）。デフォルト: 300（5分）"
     )
     parser.add_argument(
         "--once",
