@@ -140,12 +140,19 @@ def write_log_entry(entry: LogEntry) -> bool:
     """
     ログエントリをファイルに書き込む
 
+    OCRテキストが空白の場合は保存をスキップする。
+
     Args:
         entry: ログエントリ
 
     Returns:
-        bool: 書き込み成功した場合True
+        bool: 書き込み成功した場合True、スキップした場合もTrue
     """
+    # OCRテキストが空白の場合は保存しない
+    ocr_text = entry.get("ocr_text", "")
+    if not ocr_text or not ocr_text.strip():
+        return True  # スキップしたが正常終了として扱う
+
     try:
         log_file = get_log_file_path()
 
