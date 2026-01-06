@@ -53,6 +53,8 @@ def process_single_capture(
 
     # 1. アクティブウィンドウのIDを取得
     window_id = get_active_window_id()
+    if window_id is None:
+        print(f"[{timestamp.strftime('%H:%M:%S')}] Warning: Could not get window ID, capturing full screen")
 
     # 2. スクリーンショットを撮影（アクティブウィンドウのみ）
     screenshot_path = take_screenshot(window_id=window_id)

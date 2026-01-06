@@ -28,6 +28,11 @@ ENV/
 tmp/
 *.tmp
 
+# py2app build artifacts
+build/
+dist/
+*.egg-info/
+
 # Deprecated files (launchd approach didn't work due to permission issues)
 com.screenlog.agent.plist
 scripts/install.sh

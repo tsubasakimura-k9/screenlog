@@ -1,10 +1,11 @@
 """スクリーンキャプチャモジュール"""
 
-import subprocess
 import os
-import tempfile
 from pathlib import Path
 from datetime import datetime
+
+import Quartz
+from AppKit import NSBitmapImageRep, NSPNGFileType
 
 
 def get_tmp_dir() -> Path:
@@ -30,27 +31,49 @@ def take_screenshot(window_id: int | None = None) -> str | None:
     filepath = tmp_dir / f"screenshot_{timestamp}.png"
 
     try:
-        # macOS標準のscreencaptureコマンドを使用
-        # -x: 音を鳴らさない
-        # -C: カーソルを含めない
-        # -l <window-id>: 指定されたウィンドウのみをキャプチャ
-        cmd = ["screencapture", "-x", "-C"]
-
+        # Quartz APIを使用してスクリーンキャプチャ
         if window_id is not None:
-            cmd.extend(["-l", str(window_id)])
+            # 特定ウィンドウをキャプチャ
+            image = Quartz.CGWindowListCreateImage(
+                Quartz.CGRectNull,  # ウィンドウの境界を自動取得
+                Quartz.kCGWindowListOptionIncludingWindow,
+                window_id,
+                Quartz.kCGWindowImageDefault
+            )
 
-        cmd.append(str(filepath))
+            # ウィンドウキャプチャが失敗した場合、フルスクリーンにフォールバック
+            if image is None:
+                image = Quartz.CGWindowListCreateImage(
+                    Quartz.CGRectInfinite,
+                    Quartz.kCGWindowListOptionOnScreenOnly,
+                    Quartz.kCGNullWindowID,
+                    Quartz.kCGWindowImageDefault
+                )
+        else:
+            # 画面全体をキャプチャ
+            image = Quartz.CGWindowListCreateImage(
+                Quartz.CGRectInfinite,
+                Quartz.kCGWindowListOptionOnScreenOnly,
+                Quartz.kCGNullWindowID,
+                Quartz.kCGWindowImageDefault
+            )
 
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=10
-        )
-
-        if result.returncode != 0:
-            print(f"screencapture failed: {result.stderr}")
+        if image is None:
+            print("Failed to capture screen image")
             return None
+
+        # CGImageをPNGファイルに保存
+        bitmap = NSBitmapImageRep.alloc().initWithCGImage_(image)
+        if bitmap is None:
+            print("Failed to create bitmap from image")
+            return None
+
+        png_data = bitmap.representationUsingType_properties_(NSPNGFileType, None)
+        if png_data is None:
+            print("Failed to create PNG data")
+            return None
+
+        png_data.writeToFile_atomically_(str(filepath), True)
 
         if not filepath.exists():
             print("Screenshot file was not created")
@@ -58,9 +81,6 @@ def take_screenshot(window_id: int | None = None) -> str | None:
 
         return str(filepath)
 
-    except subprocess.TimeoutExpired:
-        print("Screenshot capture timed out")
-        return None
     except Exception as e:
         print(f"Screenshot capture error: {e}")
         return None

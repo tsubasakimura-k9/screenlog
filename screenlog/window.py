@@ -23,6 +23,7 @@ def get_active_app() -> str:
             ["osascript", "-e", script],
             capture_output=True,
             text=True,
+            encoding='utf-8',
             timeout=5
         )
 
@@ -65,6 +66,7 @@ def get_window_title() -> str:
             ["osascript", "-e", script],
             capture_output=True,
             text=True,
+            encoding='utf-8',
             timeout=5
         )
 
@@ -102,24 +104,27 @@ def get_active_window_id() -> Optional[int]:
     try:
         import Quartz
 
-        # アクティブなアプリケーション名を取得
-        active_app = get_active_app()
-        if active_app == "Unknown":
-            return None
-
-        # すべてのウィンドウ情報を取得
+        # 最前面のウィンドウを直接取得する方法に変更
+        # kCGWindowListOptionOnScreenOnly: 画面に表示されているウィンドウのみ
         window_list = Quartz.CGWindowListCopyWindowInfo(
-            Quartz.kCGWindowListOptionOnScreenOnly | Quartz.kCGWindowListExcludeDesktopElements,
+            Quartz.kCGWindowListOptionOnScreenOnly,
             Quartz.kCGNullWindowID
         )
 
-        # アクティブアプリのウィンドウを探す
+        if not window_list:
+            return None
+
+        # ウィンドウリストは前面から並んでいるので、最初の通常ウィンドウを探す
         for window in window_list:
             owner_name = window.get(Quartz.kCGWindowOwnerName, "")
             window_layer = window.get(Quartz.kCGWindowLayer, -1)
+            window_alpha = window.get(Quartz.kCGWindowAlpha, 0)
 
-            # アクティブアプリで、かつメインレイヤー（0）のウィンドウを探す
-            if owner_name == active_app and window_layer == 0:
+            # システムUI（Dock, メニューバー等）を除外
+            # layer=0 が通常のウィンドウ、alpha>0 が表示されているウィンドウ
+            if (window_layer == 0 and
+                window_alpha > 0 and
+                owner_name not in ["Window Server", "Dock"]):
                 window_id = window.get(Quartz.kCGWindowNumber, None)
                 if window_id is not None:
                     return int(window_id)
