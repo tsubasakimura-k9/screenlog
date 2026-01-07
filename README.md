@@ -54,14 +54,14 @@ python -m screenlog.main --once
 
 ### ログの確認
 
-ログは `~/ScreenLog/logs/` に日付別のJSONLファイルとして保存される。
+ログは `~/Library/Application Support/ScreenLog/logs/` に日付別のJSONLファイルとして保存される。
 
 ```bash
 # 今日のログを確認
-cat ~/ScreenLog/logs/$(date +%Y-%m-%d).jsonl
+cat ~/Library/Application\ Support/ScreenLog/logs/$(date +%Y-%m-%d).jsonl
 
 # 整形して表示
-cat ~/ScreenLog/logs/$(date +%Y-%m-%d).jsonl | jq .
+cat ~/Library/Application\ Support/ScreenLog/logs/$(date +%Y-%m-%d).jsonl | jq .
 ```
 
 ## ログ形式
@@ -106,7 +106,7 @@ cat ~/ScreenLog/logs/$(date +%Y-%m-%d).jsonl | jq .
 ## ファイル構成
 
 ```
-~/ScreenLog/
+~/Library/Application Support/ScreenLog/
 ├── logs/
 │   ├── 2024-12-21.jsonl
 │   ├── 2024-12-22.jsonl
