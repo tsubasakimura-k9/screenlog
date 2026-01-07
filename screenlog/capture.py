@@ -10,7 +10,8 @@ from AppKit import NSBitmapImageRep, NSPNGFileType
 
 def get_tmp_dir() -> Path:
     """一時ファイル用ディレクトリを取得"""
-    tmp_dir = Path.home() / "ScreenLog" / "tmp"
+    # アプリパッケージ配下のdata/tmpを使用
+    tmp_dir = Path(__file__).parent.parent / "data" / "tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
     return tmp_dir
 

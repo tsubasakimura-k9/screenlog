@@ -116,7 +116,7 @@ def run_loop(interval: int = 60, retention_days: int = 30):
 
     print(f"ScreenLog started. Capturing every {interval} seconds.")
     print(f"Log retention: {retention_days} days")
-    print(f"Logs will be saved to: {Path.home() / 'ScreenLog' / 'logs'}")
+    print(f"Logs will be saved to: {Path(__file__).parent.parent / 'data' / 'logs'}")
     print("-" * 60)
 
     # 起動時に古いログをクリーンアップ

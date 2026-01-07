@@ -23,10 +23,17 @@ ENV/
 
 # Logs (ログは各ユーザーのローカルに保存)
 *.log
+*.jsonl
 
 # Temporary files
 tmp/
 *.tmp
+
+# Data directory (logs and tmp are local)
+data/logs/*
+data/tmp/*
+!data/logs/.gitkeep
+!data/tmp/.gitkeep
 
 # py2app build artifacts
 build/

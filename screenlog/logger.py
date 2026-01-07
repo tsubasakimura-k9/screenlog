@@ -20,7 +20,8 @@ class LogEntry(TypedDict):
 
 def get_log_dir() -> Path:
     """ログディレクトリを取得"""
-    log_dir = Path.home() / "ScreenLog" / "logs"
+    # アプリパッケージ配下のdata/logsを使用
+    log_dir = Path(__file__).parent.parent / "data" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     return log_dir
 
