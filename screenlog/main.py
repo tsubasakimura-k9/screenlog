@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """ScreenLog - メインエントリーポイント"""
 
+import gc
 import signal
 import sys
 import time
@@ -128,6 +129,10 @@ def run_loop(interval: int = 60, retention_days: int = 30):
     current_entry: LogEntry | None = None
     current_date = datetime.now().date()
 
+    # GC実行カウンター（10回ごとにフルGCを実行）
+    capture_count = 0
+    GC_INTERVAL = 10
+
     while running:
         try:
             # 日付が変わったかチェック
@@ -152,6 +157,12 @@ def run_loop(interval: int = 60, retention_days: int = 30):
             # 現在のエントリを更新
             current_entry = new_entry
 
+            # 定期的にGCを実行してメモリを解放
+            capture_count += 1
+            if capture_count >= GC_INTERVAL:
+                gc.collect()
+                capture_count = 0
+
             # 次のキャプチャまで待機（1秒ずつ確認して停止フラグをチェック）
             for _ in range(interval):
                 if not running:
@@ -168,6 +179,8 @@ def run_loop(interval: int = 60, retention_days: int = 30):
         write_log_entry(current_entry)
         print("Wrote final log entry before stopping.")
 
+    # 最終GC
+    gc.collect()
     print("ScreenLog stopped.")
 
 

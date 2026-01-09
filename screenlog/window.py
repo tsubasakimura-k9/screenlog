@@ -1,5 +1,6 @@
 """アクティブウィンドウ取得モジュール"""
 
+import gc
 import subprocess
 from typing import Optional
 
@@ -101,35 +102,40 @@ def get_active_window_id() -> Optional[int]:
     Returns:
         Optional[int]: ウィンドウID。取得失敗時はNone
     """
+    window_list = None
+
     try:
+        import objc
         import Quartz
 
-        # 最前面のウィンドウを直接取得する方法に変更
-        # kCGWindowListOptionOnScreenOnly: 画面に表示されているウィンドウのみ
-        window_list = Quartz.CGWindowListCopyWindowInfo(
-            Quartz.kCGWindowListOptionOnScreenOnly,
-            Quartz.kCGNullWindowID
-        )
+        # Autoreleaseプール内で実行してメモリリークを防ぐ
+        with objc.autorelease_pool():
+            # 最前面のウィンドウを直接取得する方法に変更
+            # kCGWindowListOptionOnScreenOnly: 画面に表示されているウィンドウのみ
+            window_list = Quartz.CGWindowListCopyWindowInfo(
+                Quartz.kCGWindowListOptionOnScreenOnly,
+                Quartz.kCGNullWindowID
+            )
 
-        if not window_list:
+            if not window_list:
+                return None
+
+            # ウィンドウリストは前面から並んでいるので、最初の通常ウィンドウを探す
+            for window in window_list:
+                owner_name = window.get(Quartz.kCGWindowOwnerName, "")
+                window_layer = window.get(Quartz.kCGWindowLayer, -1)
+                window_alpha = window.get(Quartz.kCGWindowAlpha, 0)
+
+                # システムUI（Dock, メニューバー等）を除外
+                # layer=0 が通常のウィンドウ、alpha>0 が表示されているウィンドウ
+                if (window_layer == 0 and
+                    window_alpha > 0 and
+                    owner_name not in ["Window Server", "Dock"]):
+                    window_id = window.get(Quartz.kCGWindowNumber, None)
+                    if window_id is not None:
+                        return int(window_id)
+
             return None
-
-        # ウィンドウリストは前面から並んでいるので、最初の通常ウィンドウを探す
-        for window in window_list:
-            owner_name = window.get(Quartz.kCGWindowOwnerName, "")
-            window_layer = window.get(Quartz.kCGWindowLayer, -1)
-            window_alpha = window.get(Quartz.kCGWindowAlpha, 0)
-
-            # システムUI（Dock, メニューバー等）を除外
-            # layer=0 が通常のウィンドウ、alpha>0 が表示されているウィンドウ
-            if (window_layer == 0 and
-                window_alpha > 0 and
-                owner_name not in ["Window Server", "Dock"]):
-                window_id = window.get(Quartz.kCGWindowNumber, None)
-                if window_id is not None:
-                    return int(window_id)
-
-        return None
 
     except ImportError:
         print("Quartz framework not available")
@@ -137,3 +143,9 @@ def get_active_window_id() -> Optional[int]:
     except Exception as e:
         print(f"Failed to get window ID: {e}")
         return None
+
+    finally:
+        # Autoreleaseプールがオブジェクトを解放するため、
+        # Python参照のクリアとGCのみ実行
+        window_list = None
+        gc.collect()

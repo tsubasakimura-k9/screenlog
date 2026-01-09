@@ -1,9 +1,11 @@
 """スクリーンキャプチャモジュール"""
 
+import gc
 import os
 from pathlib import Path
 from datetime import datetime
 
+import objc
 import Quartz
 from AppKit import NSBitmapImageRep, NSPNGFileType
 
@@ -31,60 +33,74 @@ def take_screenshot(window_id: int | None = None) -> str | None:
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     filepath = tmp_dir / f"screenshot_{timestamp}.png"
 
-    try:
-        # Quartz APIを使用してスクリーンキャプチャ
-        if window_id is not None:
-            # 特定ウィンドウをキャプチャ
-            image = Quartz.CGWindowListCreateImage(
-                Quartz.CGRectNull,  # ウィンドウの境界を自動取得
-                Quartz.kCGWindowListOptionIncludingWindow,
-                window_id,
-                Quartz.kCGWindowImageDefault
-            )
+    image = None
+    bitmap = None
+    png_data = None
 
-            # ウィンドウキャプチャが失敗した場合、フルスクリーンにフォールバック
-            if image is None:
+    try:
+        # Autoreleaseプール内で実行してメモリリークを防ぐ
+        with objc.autorelease_pool():
+            # Quartz APIを使用してスクリーンキャプチャ
+            if window_id is not None:
+                # 特定ウィンドウをキャプチャ
+                image = Quartz.CGWindowListCreateImage(
+                    Quartz.CGRectNull,  # ウィンドウの境界を自動取得
+                    Quartz.kCGWindowListOptionIncludingWindow,
+                    window_id,
+                    Quartz.kCGWindowImageDefault
+                )
+
+                # ウィンドウキャプチャが失敗した場合、フルスクリーンにフォールバック
+                if image is None:
+                    image = Quartz.CGWindowListCreateImage(
+                        Quartz.CGRectInfinite,
+                        Quartz.kCGWindowListOptionOnScreenOnly,
+                        Quartz.kCGNullWindowID,
+                        Quartz.kCGWindowImageDefault
+                    )
+            else:
+                # 画面全体をキャプチャ
                 image = Quartz.CGWindowListCreateImage(
                     Quartz.CGRectInfinite,
                     Quartz.kCGWindowListOptionOnScreenOnly,
                     Quartz.kCGNullWindowID,
                     Quartz.kCGWindowImageDefault
                 )
-        else:
-            # 画面全体をキャプチャ
-            image = Quartz.CGWindowListCreateImage(
-                Quartz.CGRectInfinite,
-                Quartz.kCGWindowListOptionOnScreenOnly,
-                Quartz.kCGNullWindowID,
-                Quartz.kCGWindowImageDefault
-            )
 
-        if image is None:
-            print("Failed to capture screen image")
-            return None
+            if image is None:
+                print("Failed to capture screen image")
+                return None
 
-        # CGImageをPNGファイルに保存
-        bitmap = NSBitmapImageRep.alloc().initWithCGImage_(image)
-        if bitmap is None:
-            print("Failed to create bitmap from image")
-            return None
+            # CGImageをPNGファイルに保存
+            bitmap = NSBitmapImageRep.alloc().initWithCGImage_(image)
+            if bitmap is None:
+                print("Failed to create bitmap from image")
+                return None
 
-        png_data = bitmap.representationUsingType_properties_(NSPNGFileType, None)
-        if png_data is None:
-            print("Failed to create PNG data")
-            return None
+            png_data = bitmap.representationUsingType_properties_(NSPNGFileType, None)
+            if png_data is None:
+                print("Failed to create PNG data")
+                return None
 
-        png_data.writeToFile_atomically_(str(filepath), True)
+            png_data.writeToFile_atomically_(str(filepath), True)
 
-        if not filepath.exists():
-            print("Screenshot file was not created")
-            return None
+            if not filepath.exists():
+                print("Screenshot file was not created")
+                return None
 
-        return str(filepath)
+            return str(filepath)
 
     except Exception as e:
         print(f"Screenshot capture error: {e}")
         return None
+
+    finally:
+        # Autoreleaseプールがオブジェクトを解放するため、
+        # Python参照のクリアとGCのみ実行
+        image = None
+        bitmap = None
+        png_data = None
+        gc.collect()
 
 
 def delete_screenshot(filepath: str) -> bool:
