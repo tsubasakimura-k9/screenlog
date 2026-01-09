@@ -1,41 +1,28 @@
-"""アクティブウィンドウ取得モジュール"""
+"""アクティブウィンドウ取得モジュール - PyObjC版"""
 
 import gc
-import subprocess
 from typing import Optional
 
 
 def get_active_app() -> str:
     """
-    アクティブなアプリケーション名を取得
+    アクティブなアプリケーション名を取得（NSWorkspace使用、権限不要）
 
     Returns:
         str: アプリケーション名。取得失敗時は"Unknown"
     """
-    script = '''
-    tell application "System Events"
-        set frontApp to first application process whose frontmost is true
-        return name of frontApp
-    end tell
-    '''
-
     try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            timeout=5
-        )
+        from AppKit import NSWorkspace
 
-        if result.returncode == 0:
-            return result.stdout.strip()
-        else:
-            print(f"Failed to get active app: {result.stderr}")
-            return "Unknown"
+        workspace = NSWorkspace.sharedWorkspace()
+        active_app = workspace.frontmostApplication()
 
-    except subprocess.TimeoutExpired:
-        print("Get active app timed out")
+        if active_app:
+            return active_app.localizedName() or "Unknown"
+        return "Unknown"
+
+    except ImportError:
+        print("AppKit not available")
         return "Unknown"
     except Exception as e:
         print(f"Get active app error: {e}")
@@ -44,44 +31,69 @@ def get_active_app() -> str:
 
 def get_window_title() -> str:
     """
-    アクティブウィンドウのタイトルを取得
+    アクティブウィンドウのタイトルを取得（AXUIElement使用）
 
     Returns:
         str: ウィンドウタイトル。取得失敗時は"Unknown"
     """
-    script = '''
-    tell application "System Events"
-        set frontApp to first application process whose frontmost is true
-        tell frontApp
-            if (count of windows) > 0 then
-                return name of front window
-            else
-                return ""
-            end if
-        end tell
-    end tell
-    '''
-
     try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            encoding='utf-8',
-            timeout=5
+        from AppKit import NSWorkspace
+        from ApplicationServices import (
+            AXUIElementCreateApplication,
+            AXUIElementCopyAttributeValue,
+            kAXFocusedWindowAttribute,
+            kAXTitleAttribute,
         )
+        from CoreFoundation import CFRelease
 
-        if result.returncode == 0:
-            return result.stdout.strip()
-        else:
-            print(f"Failed to get window title: {result.stderr}")
+        # アクティブアプリのPIDを取得
+        workspace = NSWorkspace.sharedWorkspace()
+        active_app = workspace.frontmostApplication()
+
+        if not active_app:
             return "Unknown"
 
-    except subprocess.TimeoutExpired:
-        print("Get window title timed out")
+        pid = active_app.processIdentifier()
+
+        # AXUIElementを作成
+        app_element = AXUIElementCreateApplication(pid)
+        if not app_element:
+            return "Unknown"
+
+        try:
+            # フォーカスされているウィンドウを取得
+            error, focused_window = AXUIElementCopyAttributeValue(
+                app_element, kAXFocusedWindowAttribute, None
+            )
+
+            if error or not focused_window:
+                return "Unknown"
+
+            try:
+                # ウィンドウタイトルを取得
+                error, title = AXUIElementCopyAttributeValue(
+                    focused_window, kAXTitleAttribute, None
+                )
+
+                if error or not title:
+                    return "Unknown"
+
+                return str(title)
+
+            finally:
+                # focused_windowの参照をクリア
+                del focused_window
+
+        finally:
+            # app_elementの参照をクリア
+            del app_element
+
+    except ImportError as e:
+        print(f"Required framework not available: {e}")
         return "Unknown"
     except Exception as e:
-        print(f"Get window title error: {e}")
+        # アクセシビリティ権限がない場合もここに来る
+        # エラーメッセージは出さない（頻繁に呼ばれるため）
         return "Unknown"
 
 
