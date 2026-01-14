@@ -8,6 +8,7 @@ APP = ['run_screenlog.py']
 DATA_FILES = []
 OPTIONS = {
     'argv_emulation': False,
+    'iconfile': 'assets/ScreenLog.icns',
     'plist': {
         'CFBundleName': 'ScreenLog',
         'CFBundleDisplayName': 'ScreenLog',
