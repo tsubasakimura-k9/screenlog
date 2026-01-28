@@ -44,7 +44,7 @@ def group_entries_by_time_block(entries: list[LogEntry], block_minutes: int = 30
     blocks = defaultdict(list)
 
     for entry in entries:
-        ts = datetime.fromisoformat(entry["timestamp"])
+        ts = datetime.fromisoformat(entry["start_time"])
         block_start = ts.replace(
             minute=(ts.minute // block_minutes) * block_minutes,
             second=0,
@@ -81,7 +81,7 @@ def generate_raw_log(date: datetime | None = None, max_entries_per_block: int = 
         f"## {date.strftime('%Y-%m-%d')} のScreenLog",
         "",
         f"**記録数**: {len(entries)}件",
-        f"**記録時間**: {entries[0]['timestamp'][11:16]} 〜 {entries[-1]['timestamp'][11:16]}",
+        f"**記録時間**: {entries[0]['start_time'][11:16]} 〜 {entries[-1]['start_time'][11:16]}",
         "",
         "---",
         "",
@@ -131,7 +131,7 @@ def generate_raw_log(date: datetime | None = None, max_entries_per_block: int = 
                 continue
             seen_prefixes.add(prefix)
 
-            ts = entry["timestamp"][11:16]
+            ts = entry["start_time"][11:16]
             app = entry["active_app"]
             window = entry.get("window_title", "")[:60]
 
