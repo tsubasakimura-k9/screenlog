@@ -119,10 +119,15 @@ def get_active_window_id() -> Optional[int]:
     try:
         import objc
         import Quartz
+        from AppKit import NSWorkspace
 
         # Autoreleaseプール内で実行してメモリリークを防ぐ
         with objc.autorelease_pool():
-            # 最前面のウィンドウを直接取得する方法に変更
+            # まずアクティブアプリ名を取得
+            workspace = NSWorkspace.sharedWorkspace()
+            active_app = workspace.frontmostApplication()
+            active_app_name = active_app.localizedName() if active_app else None
+
             # kCGWindowListOptionOnScreenOnly: 画面に表示されているウィンドウのみ
             window_list = Quartz.CGWindowListCopyWindowInfo(
                 Quartz.kCGWindowListOptionOnScreenOnly,
@@ -132,14 +137,29 @@ def get_active_window_id() -> Optional[int]:
             if not window_list:
                 return None
 
-            # ウィンドウリストは前面から並んでいるので、最初の通常ウィンドウを探す
+            # アクティブアプリのウィンドウを探す
             for window in window_list:
                 owner_name = window.get(Quartz.kCGWindowOwnerName, "")
                 window_layer = window.get(Quartz.kCGWindowLayer, -1)
                 window_alpha = window.get(Quartz.kCGWindowAlpha, 0)
 
-                # システムUI（Dock, メニューバー等）を除外
+                # アクティブアプリのウィンドウのみを対象とする
                 # layer=0 が通常のウィンドウ、alpha>0 が表示されているウィンドウ
+                if (active_app_name and
+                    owner_name == active_app_name and
+                    window_layer == 0 and
+                    window_alpha > 0):
+                    window_id = window.get(Quartz.kCGWindowNumber, None)
+                    if window_id is not None:
+                        return int(window_id)
+
+            # アクティブアプリのウィンドウが見つからない場合はフォールバック
+            # （アプリ名が一致しない場合など）
+            for window in window_list:
+                owner_name = window.get(Quartz.kCGWindowOwnerName, "")
+                window_layer = window.get(Quartz.kCGWindowLayer, -1)
+                window_alpha = window.get(Quartz.kCGWindowAlpha, 0)
+
                 if (window_layer == 0 and
                     window_alpha > 0 and
                     owner_name not in ["Window Server", "Dock"]):
