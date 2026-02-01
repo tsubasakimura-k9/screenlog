@@ -23,6 +23,14 @@ from .logger import (
     cleanup_old_logs,
     LogEntry
 )
+from .config import (
+    get_config,
+    save_config,
+    validate_interval,
+    DEFAULT_INTERVAL,
+    DEFAULT_RETENTION_DAYS,
+    MIN_INTERVAL,
+)
 
 
 # グローバルな停止フラグ
@@ -105,7 +113,7 @@ def process_single_capture(
         delete_screenshot(screenshot_path)
 
 
-def run_loop(interval: int = 60, retention_days: int = 30):
+def run_loop(interval: int = DEFAULT_INTERVAL, retention_days: int = DEFAULT_RETENTION_DAYS):
     """
     メインループを実行
 
@@ -186,14 +194,17 @@ def run_loop(interval: int = 60, retention_days: int = 30):
 
 def main():
     """メインエントリーポイント"""
+    # 設定ファイルからデフォルト値を読み込む
+    config = get_config()
+
     parser = argparse.ArgumentParser(
         description="ScreenLog - 作業ログ自動生成ツール"
     )
     parser.add_argument(
         "-i", "--interval",
         type=int,
-        default=300,
-        help="キャプチャ間隔（秒）。デフォルト: 300（5分）"
+        default=config.get("interval", DEFAULT_INTERVAL),
+        help=f"キャプチャ間隔（秒）。最小: {MIN_INTERVAL}秒。デフォルト: %(default)s"
     )
     parser.add_argument(
         "--once",
@@ -203,11 +214,35 @@ def main():
     parser.add_argument(
         "-r", "--retention",
         type=int,
-        default=30,
-        help="ログ保持日数。デフォルト: 30"
+        default=config.get("retention_days", DEFAULT_RETENTION_DAYS),
+        help="ログ保持日数。デフォルト: %(default)s"
+    )
+    parser.add_argument(
+        "--save-config",
+        action="store_true",
+        help="現在のオプションを設定ファイルに保存して終了"
     )
 
     args = parser.parse_args()
+
+    # 間隔のバリデーション
+    try:
+        validate_interval(args.interval)
+    except ValueError as e:
+        parser.error(str(e))
+
+    # 設定保存モード
+    if args.save_config:
+        new_config = {
+            "interval": args.interval,
+            "retention_days": args.retention,
+        }
+        if save_config(new_config):
+            print(f"設定を保存しました: {new_config}")
+        else:
+            print("設定の保存に失敗しました")
+            sys.exit(1)
+        sys.exit(0)
 
     # シグナルハンドラを設定
     signal.signal(signal.SIGINT, signal_handler)
