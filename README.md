@@ -5,7 +5,7 @@ macOS上で動作する作業ログ自動生成ツール。スクリーンショ
 ## 特徴
 
 - **完全ローカル処理**: スクリーンショット・OCR処理はすべてローカルで完結（外部APIを使わない）
-- **自動記録**: 1分間隔でバックグラウンド動作
+- **自動記録**: 設定可能な間隔（デフォルト5分）でバックグラウンド動作
 - **日本語・英語対応**: macOS Vision Frameworkによる高精度OCR
 - **AI連携前提**: 蓄積されたログをAIに渡して作業時間をまとめられる
 
@@ -35,17 +35,25 @@ pip install -r requirements.txt
 ### 起動
 
 ```bash
-# 起動スクリプトを使用
-./scripts/start.sh
+# 起動スクリプトを使用（デフォルト: 5分間隔）
+./scripts/start-background.sh
+
+# キャプチャ間隔を指定して起動（秒単位）
+./scripts/start-background.sh --interval 60    # 1分間隔
+./scripts/start-background.sh --interval 300   # 5分間隔
+./scripts/start-background.sh --interval 600   # 10分間隔
 
 # または直接実行
 python -m screenlog.main
 
 # キャプチャ間隔を指定（秒）
-python -m screenlog.main -i 30
+python -m screenlog.main -i 60
 
 # 1回だけキャプチャして終了
 python -m screenlog.main --once
+
+# 設定をファイルに保存（次回以降のデフォルトになる）
+python -m screenlog.main -i 300 --save-config
 ```
 
 ### 停止

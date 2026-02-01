@@ -1,6 +1,10 @@
 #!/bin/bash
 # ScreenLog バックグラウンド起動スクリプト
 # ターミナルの画面収録権限を利用して実行
+#
+# Usage:
+#   ./start-background.sh              # デフォルト設定で起動
+#   ./start-background.sh --interval 60  # 60秒間隔で起動
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
@@ -25,7 +29,7 @@ mkdir -p "$HOME/ScreenLog/logs"
 source venv/bin/activate
 
 echo "Starting ScreenLog in background..."
-nohup python -m screenlog.main > "$LOG_FILE" 2>&1 &
+nohup python -m screenlog.main "$@" > "$LOG_FILE" 2>&1 &
 PID=$!
 echo $PID > "$PID_FILE"
 
